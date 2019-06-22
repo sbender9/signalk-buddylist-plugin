@@ -52,9 +52,9 @@ module.exports = function(app) {
   
   function checkBuddy(context, name, alertDistance, position) {
     const isBuddy = app.getPath(`vessels.${context}.buddy`)
-    if ( isBuddy === null ) {
+    if ( !isBuddy ) {
       app.debug('found buddy: %s', context) 
-      app.handleMessagew({
+      app.handleMessage(plugin.id, {
         context: `vessels.${context}`,
         updates: [{
           values: [{
@@ -71,19 +71,20 @@ module.exports = function(app) {
       const distance = geolib.getDistance(myPos, position)
       app.debug('%s is %dm away', context, distance)
       if ( distance < alertDistance*1000 ) {
-        const sent = notification[context]
-        if ( !sent ) {
+        const sentName = name || kname || context
+        const sent = notifications[context]
+        app.debug('sent: ' + sent)
+        if ( !sent || sent != sentName ) {
           app.debug('send notification for %s', context)
-          notification[context] = true
-          app.handleMessagew({
-            context: `vessels.${context}`,
+          notifications[context] = sentName
+          app.handleMessage(plugin.id, {
             updates: [{
               values: [{
                 path: `notifications.buddy.${context}`,
                 value: {
                   state: 'alert',
                   method: [ 'visual', 'sound' ],
-                  message: `Your buddy ${name || kname || context} is near`
+                  message: `Your buddy ${sentName} is near`
                 }
               }]
             }]
@@ -92,8 +93,7 @@ module.exports = function(app) {
       } else if ( notifications[context] ) {
         app.debug('clear notification for %s', context)
         delete notifications[context]
-        app.handleMessagew({
-          context: `vessels.${context}`,
+        app.handleMessage(plugin.id, {
           updates: [{
             values: [{
               path: `notifications.buddy.${context}`,
