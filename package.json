@@ -1,0 +1,21 @@
+{
+  "name": "signalk-buddylist-plugin",
+  "version": "1.0.0",
+  "description": "Provides a buddy list for Signal K Node Server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "signalk-node-server-plugin"
+  ],
+  "author": "scott@scottbender.net",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "geolib": "^3.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sbender9/signalk-buddylist-plugin"
+  }
+}
