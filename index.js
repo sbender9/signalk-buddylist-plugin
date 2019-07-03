@@ -15,12 +15,89 @@
 
 const geolib = require('geolib')
 
+const apiBase = '/signalk/v1/api/resources/buddies'
+
 module.exports = function(app) {
   var plugin = {};
   var unsubscribes = []
   const notifications = {}
 
   plugin.start = function(props) {
+    setupSubscriptions(props)
+    
+    app.get(apiBase, (req, res) => {
+      const list = (props.buddies || []).map(buddy => {
+        return JSON.parse(JSON.stringify(buddy))
+      })
+      res.json(list)
+    })
+
+    app.post(apiBase, (req, res) => {
+
+      if ( typeof req.body.urn === 'undefined' ) {
+        res.status(400).send('Please include a urn')
+        return
+      }
+
+      if ( props.buddies.find(b => b.urn == req.body.urn ) ) {
+        res.status(400).send('Buddy already exists')
+        return
+      }
+
+      props.buddies.push(req.body)
+      saveConfig(props, res)
+    })
+
+    app.delete(apiBase + '/:urn', (req, res) => {
+      const urn = req.params.urn
+
+      if ( !props.buddies.find(b => b.urn == urn) ) {
+        res.status(400).send('cannot find buddy with urn: ' + urn)
+        return
+      }
+      
+      props.buddies = props.buddies.filter(b => b.urn != urn)
+      saveConfig(props, res)
+
+      app.handleMessage(plugin.id, {
+        context: `vessels.${urn}`,
+        updates: [{
+          values: [{
+            path: '',
+            value: { buddy: false }
+          }]
+        }]
+      })
+    })
+
+    app.put(apiBase + '/:urn', (req, res) => {
+      const urn = req.params.urn
+      const buddy = props.buddiesfind(b => b.urn == urn)
+
+      if ( !buddy ) {
+        res.status(400).send('cannot find buddy with urn: ' + urn)
+        return
+      }
+
+      buddy.name = req.body.name
+      saveConfig(props, res)
+    })
+  }
+
+  function saveConfig(props, res) {
+    app.savePluginOptions(props, err => {
+      if ( err ) {
+        res.status(404).send('unable to save buddies')
+      } else {
+        res.send('ok')
+
+        stopSuscriptions()
+        setupSubscriptions(props)
+      }
+    })
+  }
+
+  function setupSubscriptions(props) {
     (props.buddies || []).forEach(buddy => {
       let command = {
         context: `vessels.${buddy.urn}`,
@@ -29,8 +106,6 @@ module.exports = function(app) {
           policy: 'instant'
         }]
       }
-
-      app.debug('subscribe %j', command)
       
       app.subscriptionmanager.subscribe(command, unsubscribes, subscription_error, delta => {
         delta.updates.forEach(update => {
@@ -110,6 +185,10 @@ module.exports = function(app) {
   }
 
   plugin.stop = function() {
+    stopSuscriptions()
+  }
+
+  function stopSuscriptions() {
     unsubscribes.forEach(f => f())
     unsubscribes = []
   }
