@@ -111,7 +111,7 @@ module.exports = function(app) {
         delta.updates.forEach(update => {
           update.values.forEach(pv => {
             if ( pv.path == 'navigation.position' ) {
-              checkBuddy(buddy.urn, buddy.name, props.alertDistance, pv.value)
+              checkBuddy(buddy.urn, buddy.name, props.alert, props.alertDistance, pv.value)
             }
           })
         })
@@ -125,7 +125,7 @@ module.exports = function(app) {
     app.setProviderError(err.message)
   }
   
-  function checkBuddy(context, name, alertDistance, position) {
+  function checkBuddy(context, name, alertEnabled, alertDistance, position) {
     const isBuddy = app.getPath(`vessels.${context}.buddy`)
     if ( !isBuddy ) {
       app.debug('found buddy: %s', context) 
@@ -139,47 +139,49 @@ module.exports = function(app) {
         }]
       })
     }
-    const kname = app.getPath(`/vessels/${context}/name`)
-    const myPos = app.getSelfPath('navigation.position.value')
-    app.debug('my pos %j', myPos)
-    if ( myPos && myPos.latitude && myPos.longitude ) {
-      const distance = geolib.getDistance(myPos, position)
-      app.debug('%s is %dm away', context, distance)
-      if ( distance < alertDistance*1000 ) {
-        const sentName = name || kname || context
-        const sent = notifications[context]
-        app.debug('sent: ' + sent)
-        if ( !sent || sent != sentName ) {
-          app.debug('send notification for %s', context)
-          notifications[context] = sentName
+    if ( alert ) {
+      const kname = app.getPath(`/vessels/${context}/name`)
+      const myPos = app.getSelfPath('navigation.position.value')
+      app.debug('my pos %j', myPos)
+      if ( myPos && myPos.latitude && myPos.longitude ) {
+        const distance = geolib.getDistance(myPos, position)
+        app.debug('%s is %dm away', context, distance)
+        if ( distance < alertDistance*1000 ) {
+          const sentName = name || kname || context
+          const sent = notifications[context]
+          app.debug('sent: ' + sent)
+          if ( !sent || sent != sentName ) {
+            app.debug('send notification for %s', context)
+            notifications[context] = sentName
+            app.handleMessage(plugin.id, {
+              updates: [{
+                values: [{
+                  path: `notifications.buddy.${context}`,
+                  value: {
+                    state: 'alert',
+                    method: [ 'visual', 'sound' ],
+                    message: `Your buddy ${sentName} is near`
+                  }
+                }]
+              }]
+            })
+          }
+        } else if ( notifications[context] ) {
+          app.debug('clear notification for %s', context)
+          delete notifications[context]
           app.handleMessage(plugin.id, {
             updates: [{
               values: [{
                 path: `notifications.buddy.${context}`,
                 value: {
-                  state: 'alert',
-                  method: [ 'visual', 'sound' ],
-                  message: `Your buddy ${sentName} is near`
-                }
+                  state: 'normal',
+                  method: [],
+                  message: `Your buddy ${name || kname || context} is away`
+              }
               }]
             }]
           })
         }
-      } else if ( notifications[context] ) {
-        app.debug('clear notification for %s', context)
-        delete notifications[context]
-        app.handleMessage(plugin.id, {
-          updates: [{
-            values: [{
-              path: `notifications.buddy.${context}`,
-              value: {
-                state: 'normal',
-                method: [],
-                message: `Your buddy ${name || kname || context} is away`
-              }
-            }]
-          }]
-        })
       }
     }
   }
