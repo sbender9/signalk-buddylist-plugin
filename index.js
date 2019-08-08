@@ -139,7 +139,7 @@ module.exports = function(app) {
         }]
       })
     }
-    if ( alert ) {
+    if ( alertEnabled ) {
       const kname = app.getPath(`/vessels/${context}/name`)
       const myPos = app.getSelfPath('navigation.position.value')
       app.debug('my pos %j', myPos)
