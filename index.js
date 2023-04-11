@@ -111,7 +111,7 @@ module.exports = function(app) {
         delta.updates.forEach(update => {
           update.values.forEach(pv => {
             if ( pv.path == 'navigation.position' ) {
-              checkBuddy(buddy.urn, buddy.name, props.alert, props.alertDistance, pv.value)
+              checkBuddy(buddy.urn, buddy.name, props.alert, props.alertDistance, props.resendAlerts, pv.value)
             }
           })
         })
@@ -125,7 +125,7 @@ module.exports = function(app) {
     app.setProviderError(err.message)
   }
   
-  function checkBuddy(context, name, alertEnabled, alertDistance, position) {
+  function checkBuddy(context, name, alertEnabled, alertDistance, resendAlerts, position) {
     const isBuddy = app.getPath(`vessels.${context}.buddy`)
     if ( !isBuddy ) {
       app.debug('found buddy: %s', context) 
@@ -149,17 +149,25 @@ module.exports = function(app) {
         if ( distance < alertDistance*1000 ) {
           const sentName = name || kname || context
           const sent = notifications[context]
+          const path = `notifications.buddy.${context}`
+          const existing = app.getSelfPath(path)
+
+          let method = [ "visual", "sound" ]
+          if ( existing && existing.value && existing.value.state !== 'normal' ) {
+            method = existing.value.method
+          }
+          
           app.debug('sent: ' + sent)
-          if ( !sent || sent != sentName ) {
+          if ( !sent || resendAlerts || sent != sentName ) {
             app.debug('send notification for %s', context)
             notifications[context] = sentName
             app.handleMessage(plugin.id, {
               updates: [{
                 values: [{
-                  path: `notifications.buddy.${context}`,
+                  path,
                   value: {
                     state: 'alert',
-                    method: [ 'visual', 'sound' ],
+                    method,
                     message: `Your buddy ${sentName} is near`
                   }
                 }]
@@ -227,6 +235,12 @@ module.exports = function(app) {
         title: 'Alert',
         description: 'Send a notification when a buddy is near',
         default: true
+      },
+      resendAlerts: {
+        type: 'boolean',
+        title: 'Resend Alerts',
+        description: 'Continually send notifications when a buddy is near',
+        default: false
       },
       alertDistance: {
         type: 'number',
