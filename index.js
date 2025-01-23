@@ -304,6 +304,10 @@ module.exports = function(app) {
   plugin.name = "Buddy List"
   plugin.description = "Provides a buddy list for Signal K Node Server"
 
+  plugin.feature = "buddies"
+  plugin.getOpenApi = () => require('./openApi.json')
+  plugin.registerWithRouter = () => {}
+
   plugin.schema = {
     type: "object",
     properties: {
