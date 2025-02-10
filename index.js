@@ -16,6 +16,7 @@
 const geolib = require('geolib')
 
 const apiBase = '/signalk/v1/api/resources/buddies'
+const v2ApiBase = '/signalk/v2/api/resources/buddies'
 
 module.exports = function(app) {
   var plugin = {};
@@ -24,10 +25,19 @@ module.exports = function(app) {
 
   plugin.start = function(props) {
     setupSubscriptions(props)
-    
+
     app.get(apiBase, (req, res) => {
       const list = (props.buddies || []).map(buddy => {
         return JSON.parse(JSON.stringify(buddy))
+      })
+      res.json(list)
+    })
+
+    app.get(v2ApiBase, (req, res) => {
+      const buddies = (Array.isArray(props.buddies) ? props.buddies : [])
+      const list = {}
+      buddies.forEach( buddy => {
+        list[buddy.urn] = {name: buddy.name}
       })
       res.json(list)
     })
@@ -46,6 +56,27 @@ module.exports = function(app) {
 
       props.buddies.push(req.body)
       saveConfig(props, res)
+    })
+
+    app.post(v2ApiBase, (req, res) => {
+      if ( typeof req.body.urn === 'undefined' ) {
+        res.status(400).json({
+          "state": "FAILED",
+          "statusCode": 400,
+          "message": "Please include a urn!"
+        })
+        return
+      }
+      if ( props.buddies.find(b => b.urn === req.body.urn ) ) {
+        res.status(400).json({
+          "state": "FAILED",
+          "statusCode": 400,
+          "message": "Buddy already exists!"
+        })
+        return
+      }
+      props.buddies.push(req.body)
+      saveConfigV2(props, res)
     })
 
     app.delete(apiBase + '/:urn', (req, res) => {
@@ -70,6 +101,30 @@ module.exports = function(app) {
       })
     })
 
+    app.delete(v2ApiBase + '/:urn', (req, res) => {
+      if ( !props.buddies.find(b => b.urn === req.params.urn) ) {
+        res.status(404).json({
+          "state": "FAILED",
+          "statusCode": 404,
+          "message": `Cannot find buddy with urn: ${req.params.urn}`
+        })
+        return
+      }
+      
+      props.buddies = props.buddies.filter(b => b.urn !== req.params.urn)
+      saveConfigV2(props, res)
+
+      app.handleMessage(plugin.id, {
+        context: `vessels.${req.params.urn}`,
+        updates: [{
+          values: [{
+            path: '',
+            value: { buddy: false }
+          }]
+        }]
+      })
+    })
+
     app.put(apiBase + '/:urn', (req, res) => {
       const urn = req.params.urn
       const buddy = props.buddiesfind(b => b.urn == urn)
@@ -81,6 +136,48 @@ module.exports = function(app) {
 
       buddy.name = req.body.name
       saveConfig(props, res)
+    })
+
+    app.put(v2ApiBase + '/:urn', (req, res) => {
+      const buddy = props.buddies.find(b => b.urn === req.params.urn )
+      if ( !buddy ) {
+        res.status(404).json({
+          "state": "FAILED",
+          "statusCode": 404,
+          "message": `Cannot find buddy with urn: ${req.params.urn}`
+        })
+        return
+      }
+      if ( typeof req.body.name === 'undefined' ) {
+        res.status(400).json({
+          "state": "FAILED",
+          "statusCode": 400,
+          "message": "Please include a name!"
+        })
+        return
+      }
+      buddy.name = req.body.name
+      saveConfigV2(props, res)
+    })
+  }
+
+  function saveConfigV2(props, res) {
+    app.savePluginOptions(props, err => {
+      if ( err ) {
+        res.status(404).json({
+          "state": "FAILED",
+          "statusCode": 400,
+          "message": "unable to save buddies!"
+        })
+      } else {
+        res.json({
+          "state": "COMPLETED",
+          "statusCode": 200,
+          "message": "Buddies saved!"
+        })
+        stopSuscriptions()
+        setupSubscriptions(props)
+      }
     })
   }
 
@@ -206,6 +303,10 @@ module.exports = function(app) {
   plugin.id = "signalk-buddylist-plugin"
   plugin.name = "Buddy List"
   plugin.description = "Provides a buddy list for Signal K Node Server"
+
+  plugin.feature = "buddies"
+  plugin.getOpenApi = () => require('./openApi.json')
+  plugin.registerWithRouter = () => {}
 
   plugin.schema = {
     type: "object",
