@@ -24,6 +24,9 @@ module.exports = function(app) {
   const notifications = {}
 
   plugin.start = function(props) {
+    app.debug(`Loaded buddy list: ${JSON.stringify(props.buddies)}`)
+    props.buddies = Array.isArray(props?.buddies) ?  props.buddies : []
+    
     setupSubscriptions(props)
 
     app.get(apiBase, (req, res) => {
@@ -34,9 +37,8 @@ module.exports = function(app) {
     })
 
     app.get(v2ApiBase, (req, res) => {
-      const buddies = (Array.isArray(props.buddies) ? props.buddies : [])
       const list = {}
-      buddies.forEach( buddy => {
+      props.buddies.forEach( buddy => {
         list[buddy.urn] = {name: buddy.name}
       })
       res.json(list)
@@ -167,7 +169,7 @@ module.exports = function(app) {
         res.status(404).json({
           "state": "FAILED",
           "statusCode": 400,
-          "message": "unable to save buddies!"
+          "message": "Unable to save buddies!"
         })
       } else {
         res.json({
