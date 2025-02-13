@@ -1,6 +1,6 @@
 {
   "name": "signalk-buddylist-plugin",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Provides a buddy list for Signal K Node Server",
   "main": "index.js",
   "scripts": {
